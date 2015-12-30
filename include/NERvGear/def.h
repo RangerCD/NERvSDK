@@ -17,16 +17,28 @@ namespace NERvGear {
 #define NULL 0
 #endif // NULL
 
+
+/// \ingroup mod_function
+/// @{
+
+
+/// \brief Computes the minimum of \a a and \a b.
 template<class T>
 static inline T NERvMin(T a, T b) { return a < b ? a : b; }
 
+/// \brief Computes the maximum of \a a and \a b.
 template<class T>
 static inline T NERvMax(T a, T b) { return a > b ? a : b; }
+
+
+/// @}
+
 
 // defined in winbase.h
 #ifdef __GNUC__     // GCC
 #define NERvSyncIncrement(_PTR) __sync_add_and_fetch_4(_PTR, 1)
 #define NERvSyncDecrement(_PTR) __sync_sub_and_fetch_4(_PTR, 1)
+#define NVG_WEAK_SYMBOL __attribute__((weak))
 #elif _MSC_VER      // MSVC
 extern "C" {
 	long __cdecl _InterlockedIncrement(long volatile *Addend);
@@ -36,6 +48,7 @@ extern "C" {
 #pragma intrinsic(_InterlockedDecrement)
 #define NERvSyncIncrement _InterlockedIncrement
 #define NERvSyncDecrement _InterlockedDecrement
+#define NVG_WEAK_SYMBOL __declspec(selectany)
 #else               // U can U up
 #endif // __GNUC__
 
@@ -52,49 +65,79 @@ extern "C" {
 #define NVG_MODULE_DLL "module32.dll"
 #endif // WIN64 || _WIN64
 
-#ifdef _NVG_DLLEXPORT_CONTROL
-#define NVG_DLLEXPORT __declspec(dllexport)
+#ifdef _NVG_BUILD_RES
+#define NVG_SYMEXPORT __declspec(dllexport)
 #else
-#define NVG_DLLEXPORT // MinGW export all symbols by default
-#endif // _NVG_DLLEXPORT_CONTROL
+#define NVG_SYMEXPORT __declspec(dllimport)
+#endif // _NVG_BUILD_RES
 
-#ifdef _NVG_BUILD_DLL
-#define NVG_EXPORT(_RET) extern "C" NVG_DLLEXPORT _RET __cdecl
-#define NVG_EXPORT_SYMBOL extern "C" NVG_DLLEXPORT
+#ifdef _NVG_BUILD_API
+#define NVG_APIEXPORT __declspec(dllexport)
 #else
-#define NVG_EXPORT(_RET) extern "C" _RET __cdecl
-#define NVG_EXPORT_SYMBOL extern "C" __declspec(dllimport)  // fix for VC
-#endif // _NVG_BUILD_DLL
+// TODO: Remove source dependences between CORE and API.
+#ifdef _NVG_BUILD_CORE
+#define NVG_APIEXPORT
+#else
+#define NVG_APIEXPORT __declspec(dllimport)
+#endif // _NVG_BUILD_CORE
+#endif // _NVG_BUILD_API
 
-#ifdef _NVG_EXPORT_UID
-#define NVG_DEFINE_UID(_NAME, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A) \
-    extern "C" __declspec(dllexport) const UID _NAME = { _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A }
+#if defined(_NVG_BUILD_CORE)
+#define NVG_COREXPORT __declspec(dllexport)
+#elif defined(_NVG_BUILD_API) || defined(_NVG_BUILD_HOST)
+#define NVG_COREXPORT __declspec(dllimport)
 #else
-//! Define NVG_FLAG_INIT_UID in a source file if you don't link against DLL containing the UID
+#define NVG_COREXPORT
+#endif // _NVG_BUILD_CORE
+
+#define NVG_EXPORT_SYMBOL extern "C" NVG_SYMEXPORT
+#define NVG_EXPORT(_RET)  extern "C" NVG_APIEXPORT _RET __cdecl
+
+#ifdef NVG_FLAG_FORCE_EXPORT
+#define _NVG_EXPORT(_RET) extern "C" __declspec(dllexport) _RET __cdecl
+#else // VC use def file to export these symbols while MinGW has no need to declare explicitly.
+#define _NVG_EXPORT(_RET) extern "C" _RET __cdecl
+#endif // NVG_FLAG_FORCE_EXPORT
+
 #ifdef NVG_FLAG_INIT_UID
-#define NVG_DEFINE_UID(_NAME, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A) \
-    static const UID _NAME = { _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A }
+#ifdef _NVG_BUILD_RES
+#define NVG_EXPORT_UID(_NAME, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A) \
+    extern "C" __declspec(dllexport) const ::NERvGear::UID _NAME = { _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A }
 #else
-#define NVG_DEFINE_UID(_NAME, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A) \
-    NVG_EXPORT_SYMBOL const UID _NAME
+#define NVG_EXPORT_UID(_NAME, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A) \
+    extern const ::NERvGear::UID NVG_WEAK_SYMBOL _NAME = { _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A }
+#endif // _NVG_BUILD_RES
+#else
+#define NVG_EXPORT_UID(_NAME, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A) \
+    NVG_EXPORT_SYMBOL const ::NERvGear::UID _NAME
 #endif // NVG_FLAG_INIT_UID
-#endif // _NVG_EXPORT_UID
+
+#define NVG_DEFINE_UID(_NAME, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A) \
+    extern const ::NERvGear::UID NVG_WEAK_SYMBOL _NAME = { _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _A }
 
 //! Define NVG_FLAG_IMPORT in your project when importing plug-in DLLs
+//! Define NVG_FLAG_FORCE_EXPORT in your project if you really want to export them explicitly.
+// TODO: Change NVG_EXPORT_CLASS to NVG_DLLEXPORT
 #ifdef NVG_FLAG_IMPORT
-#define NVG_EXPORT_CLASS __declspec(dllimport)
-#elif defined(_MSC_VER) || defined(_NVG_DLLEXPORT_CONTROL)
-#define NVG_EXPORT_CLASS __declspec(dllexport)
+#define NVG_DLLEXPORT __declspec(dllimport)
 #else
-#define NVG_EXPORT_CLASS
+#if defined(_MSC_VER) || defined(NVG_FLAG_FORCE_EXPORT)
+#define NVG_DLLEXPORT __declspec(dllexport)
+#else
+#define NVG_DLLEXPORT
+#endif // _MSC_VER
 #endif // NVG_FLAG_IMPORT
 
 #define NVG_DEPRECATED(_TYPE, _EXTRA) __declspec(deprecated("This " _TYPE " was deprecated, " _EXTRA "."))
 
+// declare module
+
+NVG_COREXPORT extern struct MODULE NVG_MODULE;
+
 // declare IDs
 
 union UID;
-NVG_DEFINE_UID(NVG_ID_NULL, 0x00000000, 0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+NVG_EXPORT_SYMBOL const UID NVG_ID_NULL;
 static const UID& ID_NULL = NVG_ID_NULL;
 
 }

@@ -16,6 +16,7 @@
 #include <NERvGear/object.h>
 #include <NERvGear/template.h>
 
+#include <NERvGear/component/CPlugin.h>
 #include <NERvGear/interface/IPlugin.h>
 
 namespace NERvGear {
@@ -41,10 +42,12 @@ public:
         return S_OK;
     }
 
+    virtual ~PluginImpl() {}
 };
 
-#define NVG_DECLARE_PLUGIN(_PLUGIN_CLASS)   public: virtual ~_PLUGIN_CLASS() {} \
-                                                    static const ::NERvGear::OBJECT_INFO STATIC_OBJECT_INFO;
+#define NVG_DECLARE_PLUGIN(_PLUGIN_CLASS) public: \
+    long OnCreate(::NERvGear::MODULE* module, ::NERvGear::IUnknown* outer, const ::NERvGear::UID& iid, void** ppv) { return 0; } \
+    static const ::NERvGear::OBJECT_INFO STATIC_OBJECT_INFO;
 
 // NOTE: remove NVG_BEGIN_PLUGIN_INFO from Code Completion parser
 #define NVG_BEGIN_PLUGIN_INFO(_PLUGIN_CLASS) const ::NERvGear::PLUGIN_INFO NVG_PLUGIN_INFO = { {NVS_VER_REV},
@@ -64,15 +67,15 @@ public:
                                            { {NVS_VER_REV}, ::NERvGear::ID_CPlugin, NVG_PLUGIN_INFO.id, NVG_PLUGIN_INFO.version, NVG_PLUGIN_INFO.name, NVG_PLUGIN_INFO.descrip, NULL }; \
 
 #define NVG_NO_COMPONENT_REGISTER(_PLUGIN) namespace NERvGear { \
-                                           NVG_EXPORT(long) DllRegisterServer() { return S_FALSE; } \
-                                           NVG_EXPORT(long) DllUnregisterServer() { return S_FALSE; } }
+                                           _NVG_EXPORT(long) DllRegisterServer() { return S_FALSE; } \
+                                           _NVG_EXPORT(long) DllUnregisterServer() { return S_FALSE; } }
 
-#define NVG_BEGIN_COMPONENT_REGISTER(_PLUGIN) namespace NERvGear { NVG_EXPORT(long) DllRegisterServer() {
-    #define NVG_REGISTER_OBJECT(_OBJ, _AGG) if (IObjectFactory* factory = nvg_new NerveFactoryT<_OBJ, _AGG>) { \
+#define NVG_BEGIN_COMPONENT_REGISTER(_PLUGIN) namespace NERvGear { _NVG_EXPORT(long) DllRegisterServer() {
+    #define NVG_REGISTER_OBJECT(_OBJ, _AGG) if (IObjectFactory* factory = nvg_new ObjectFactoryT<_OBJ, _AGG>) { \
                                                 NERvRegisterObject(_OBJ::STATIC_OBJECT_INFO.classID, _OBJ::STATIC_OBJECT_INFO.objectID, factory); \
                                                 factory->Release(); \
                                             }
-#define NVG_END_COMPONENT_REGISTER() return S_OK; } NVG_EXPORT(long) DllUnregisterServer() { return NERvUnregisterObject(ID_NULL, ID_NULL); } }
+#define NVG_END_COMPONENT_REGISTER() return S_OK; } _NVG_EXPORT(long) DllUnregisterServer() { return NERvUnregisterObject(ID_NULL, ID_NULL); } }
 
 // NOTE: remove NVG_END_PLUGIN_INFO from Code Completion parser
 
@@ -85,29 +88,29 @@ public:
                                                 return true; \
                                             } \
                                             \
-                                            NVG_EXPORT(long) DllCanUnloadNow() \
+                                            _NVG_EXPORT(long) DllCanUnloadNow() \
                                             { \
                                                 return (NVG_MODULE.nActive || NVG_MODULE.nLock) ? S_FALSE : S_OK; \
                                             } \
                                             \
-                                            NVG_EXPORT(PLUGIN_INFO const *) DllGetInfo() \
+                                            _NVG_EXPORT(PLUGIN_INFO const *) DllGetInfo() \
                                             { \
                                                 return &NVG_PLUGIN_INFO; \
                                             } \
                                             \
-                                            NVG_EXPORT(MODULE*) DllRegisterModule(ModuleContext* context) \
+                                            _NVG_EXPORT(MODULE*) DllRegisterModule(ModuleContext* context) \
                                             { \
                                                 NVG_MODULE.context = context; \
                                                 return &NVG_MODULE; \
                                             } \
                                             \
-                                            NVG_EXPORT(long) DllGetClassObject(const GUID& classID, const GUID& interfaceID, void** ppv) \
+                                            _NVG_EXPORT(long) DllGetClassObject(const GUID& classID, const GUID& interfaceID, void** ppv) \
                                             { \
                                                 UID const & cid = *reinterpret_cast<const UID*>(&classID); \
                                                 UID const & iid = *reinterpret_cast<const UID*>(&interfaceID); \
                                                 if (cid == ID_CPlugin) { \
                                                     if (iid == ID_IUnknown || iid == ID_IClassFactory || iid == ID_IObjectFactory) \
-                                                        return (*ppv = nvg_new NerveFactoryT<_PLUGIN_CLASS, false>) ? S_OK : E_OUTOFMEMORY; \
+                                                        return (*ppv = nvg_new ObjectFactoryT<_PLUGIN_CLASS, false>) ? S_OK : E_OUTOFMEMORY; \
                                                     else \
                                                         return E_NOINTERFACE; \
                                                 } else { return E_NOTIMPL; } \
@@ -123,6 +126,8 @@ enum FLAG {
 
     WIDGET  = 0x00000001,
     THEME   = 0x00000002,
+
+    STRICT_MODE = 0x80000000,
 
     MIXED   = 0xFFFFFFFF
 };
@@ -148,6 +153,10 @@ struct PLUGIN_INFO {
     void* reserved;
 };
 
-}
+enum {
+    E_PLUGIN_INCOMPATIBLE = NVG_MAKERESULT(ERROR, 1),
+};
+
+} // NERvGear
 
 #endif // NVG_PLUGIN_H

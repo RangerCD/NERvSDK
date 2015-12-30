@@ -4,9 +4,12 @@
 
 # VS files
 
+*.ncb
 *.sdf
 *.suo
+*.user
 
 # CB files
 
+*.depend
 *.layout
